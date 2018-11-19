@@ -2,7 +2,7 @@ import keras
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-from keras_one_cycle.clr import LRFinder
+from keras_one_cycle.clr import LRFinder, OneCycleLR
 from keras.applications import MobileNet
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from keras.layers import Dense, Flatten
@@ -20,10 +20,10 @@ from perf_logger import *
 from preprocessing import image_generator_xd, df_to_image_array_xd
 from se_resnext import SEResNextImageNet
 
-EXPERIMENT_NAME = "128x128_mobile_net_lr_finder"
-# ex = Experiment(EXPERIMENT_NAME)
-# ex.observers.append(MongoObserver.create())  # hook into the MongoDB
-# ex.captured_out_filter = apply_backspaces_and_linefeeds  # make output more readable
+EXPERIMENT_NAME = "128x128_mobile_net_super_convergence"
+ex = Experiment(EXPERIMENT_NAME)
+ex.observers.append(MongoObserver.create())  # hook into the MongoDB
+ex.captured_out_filter = apply_backspaces_and_linefeeds  # make output more readable
 
 np.random.seed(seed=1987)
 tf.set_random_seed(seed=1987)
@@ -32,12 +32,12 @@ tf.set_random_seed(seed=1987)
 #@ex.config
 def track_params():
     batch_size = 512
-    num_samples = 200000
+    num_samples = 500
     steps = num_samples // batch_size
     epochs = 1
     size = 128
     lw = 6
-    saved_model = None#"weights/128x128_mobilenet_copy.hdf5"
+    saved_model = None  # "weights/128x128_mobilenet_copy.hdf5"
 
 
 #@ex.capture
@@ -71,7 +71,7 @@ def main(batch_size, epochs,
     # model = Model(inputs=base_model.input, outputs=predictions)
     # model = base_model
     model = MobileNet(input_shape=(size, size, 1), alpha=1., weights=None, classes=NCATS)
-    model.compile(optimizer=Adam(lr=0.002), loss='categorical_crossentropy',
+    model.compile(optimizer=Adam(lr=0.000125), loss='categorical_crossentropy',
                   metrics=[categorical_crossentropy, categorical_accuracy, top_3_accuracy])
 
     print("finished compiling model")
@@ -83,12 +83,9 @@ def main(batch_size, epochs,
         validation_data=(x_valid, y_valid),
         callbacks=[ModelCheckpoint("weights/" + EXPERIMENT_NAME + "_weights_" + ".hdf5", monitor='val_loss',
                                    save_best_only=True, mode='auto', period=1),
-                   #LogPerformance(log_performance),
-                   ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.001),
-                   LRFinder(steps * batch_size, batch_size,
-                            0.0001, 0.01,
-                            validation_data=(x_valid, y_valid),
-                            lr_scale='exp', save_dir='learning_rate_losses/')
+                   OneCycleLR(num_samples=batch_size*steps, num_epochs=epochs, batch_size=batch_size, max_lr=0.006,
+                              maximum_momentum=None, minimum_momentum=None),
+                   ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.001)
                    ]
     )
 
@@ -97,13 +94,13 @@ def main(batch_size, epochs,
     print('Test accuracy:', score[1])
     return score[1]
 
-if __name__ =="__main__":
+
+if __name__ == "__main__":
     batch_size = 512
-    num_samples = 50000
+    num_samples = 5000000
     steps = num_samples // batch_size
-    epochs = 1
+    epochs = 40
     size = 128
     lw = 6
     saved_model = None  # "weights/128x128_mobilenet_copy.hdf5"
-    main(batch_size=batch_size, steps=steps, epochs=1, lw=6, size=128, saved_model=saved_model)
-
+    main(batch_size=batch_size, steps=steps, epochs=epochs, lw=lw, size=size, saved_model=saved_model)
