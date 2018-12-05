@@ -1,7 +1,6 @@
 NCSVS = 100
 NCATS = 340
 BASE_SIZE = 256
-INPUT_FOLDER = "/home/ubuntu/data/"
 
 CATEGORIES = ['airplane',
               'alarm clock',
@@ -343,3 +342,5 @@ CATEGORIES = ['airplane',
               'yoga',
               'zebra',
               'zigzag']
+
+CATEGORIES_TO_INDEX = {category:index  for index, category in enumerate(CATEGORIES)}

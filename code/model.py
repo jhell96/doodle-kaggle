@@ -1,29 +1,25 @@
-import keras
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-from keras_one_cycle.clr import LRFinder, OneCycleLR
-from keras.applications import MobileNet, ResNet50
+from keras.applications import MobileNet
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
-from keras.layers import Dense, Flatten
 from keras.losses import categorical_crossentropy
 from keras.metrics import categorical_accuracy
-from keras.models import Model
 from keras.optimizers import Adam
 from sacred import Experiment
 from sacred.observers import MongoObserver
 from sacred.utils import apply_backspaces_and_linefeeds
 
-from constants import NCATS, NCSVS, INPUT_FOLDER
+from active_learning import BasicActiveLearner
 from metrics import top_3_accuracy
 from perf_logger import *
-from preprocessing import image_generator_xd, df_to_image_array_xd
-from se_resnext import SEResNextImageNet
+from preprocessing import Database, get_image_array, get_y_encoding
 
-EXPERIMENT_NAME = "128x128_resnet50"
+EXPERIMENT_NAME = "128x128_mobilenet_base_active_learner"
 ex = Experiment(EXPERIMENT_NAME)
 ex.observers.append(MongoObserver.create())  # hook into the MongoDB
 ex.captured_out_filter = apply_backspaces_and_linefeeds  # make output more readable
+
 
 np.random.seed(seed=1987)
 tf.set_random_seed(seed=1987)
@@ -31,11 +27,11 @@ tf.set_random_seed(seed=1987)
 
 @ex.config
 def track_params():
-    batch_size = 128
-    num_samples = 5000000
+    batch_size = 512
+    num_samples = 100000
     steps = num_samples // batch_size
-    epochs = 40
-    size = 512
+    epochs = 50
+    size = 128
     lw = 6
     saved_model = None  # "weights/128x128_mobilenet_copy.hdf5"
 
@@ -55,31 +51,35 @@ def log_performance(_run, logs):
 @ex.automain
 def main(batch_size, epochs,
          steps, size, lw, saved_model):
-    valid_df = pd.read_csv(INPUT_FOLDER + 'train_k{}.csv.gz'.format(NCSVS - 1), nrows=3000)
+    valid_df = pd.read_csv("/home/doodle/pedro/data/validation.csv", nrows=10000)
 
-    train_datagen = image_generator_xd(size=size, batchsize=batch_size, ks=range(NCSVS - 1), lw=lw)
-    x_valid = df_to_image_array_xd(valid_df, size, lw)
-    y_valid = keras.utils.to_categorical(valid_df.y, num_classes=NCATS)
+    db = Database(batch_size, size, lw)
+    active_learner = BasicActiveLearner()
+    x_valid = get_image_array(valid_df["drawing"], size, lw)
+    y_valid = get_y_encoding(valid_df['word'])
 
-    model = ResNet50(weights=None, input_shape=(size, size, 1), classes=340)
+    model = MobileNet(weights=None, input_shape=(size, size, 1), classes=340)
     model.compile(optimizer=Adam(lr=0.0002), loss='categorical_crossentropy',
                   metrics=[categorical_crossentropy, categorical_accuracy, top_3_accuracy])
     print("finished compiling model")
     if saved_model is not None:
         model.load_weights(saved_model)
-
-    model.fit_generator(
-        train_datagen, steps_per_epoch=steps, epochs=epochs, verbose=1,
-        validation_data=(x_valid, y_valid),
-        callbacks=[
-                   ModelCheckpoint("weights/" + EXPERIMENT_NAME + "_weights_" + ".hdf5", monitor='val_loss',
-                                           save_best_only=True, mode='auto', period=1),
-                   LogPerformance(log_performance),
-                   ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.001),
-                   # LRFinder(batch_size * steps, batch_size, minimum_lr=1e-5, maximum_lr=1, lr_scale='exp',
-                   #          save_dir="learning_rate_losses/", verbose=True)
-                   ]
-    )
+    for _ in range(epochs):
+        train_datagen = db.processed_batch_generator()
+        model.fit_generator(
+            train_datagen, steps_per_epoch=steps, epochs=1, verbose=1,
+            validation_data=(x_valid, y_valid),
+            callbacks=[
+                ModelCheckpoint("weights/" + EXPERIMENT_NAME + "_weights_" + ".hdf5", monitor='val_loss',
+                                save_best_only=True, mode='auto', period=1),
+                LogPerformance(log_performance),
+                ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.001),
+                # LRFinder(batch_size * steps, batch_size, minimum_lr=1e-5, maximum_lr=1, lr_scale='exp',
+                #          save_dir="learning_rate_losses/", verbose=True)
+            ]
+        )
+        y_valid_pred_prob = model.predict(x_valid)
+        db.prob_dist = active_learner.compute_new_prob_dist(y_valid, y_valid_pred_prob, db.prob_dist)
 
     score = model.evaluate(x_valid, y_valid, verbose=0)
     print('Test loss:', score[0])
