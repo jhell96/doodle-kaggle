@@ -15,7 +15,7 @@ from metrics import top_3_accuracy
 from perf_logger import *
 from preprocessing import Database, get_image_array, get_y_encoding
 
-EXPERIMENT_NAME = "128x128_mobilenet_no_learner"
+EXPERIMENT_NAME = "128x128_mobilenet_no_learner_removing_unrecognized"
 ex = Experiment(EXPERIMENT_NAME)
 ex.observers.append(MongoObserver.create())  # hook into the MongoDB
 ex.captured_out_filter = apply_backspaces_and_linefeeds  # make output more readable
@@ -43,7 +43,7 @@ def log_performance(_run, logs):
     _run.log_scalar("categorical_accuracy", float(logs.get('categorical_accuracy')))
     _run.log_scalar("top_3_accuracy", float(logs.get('top_3_accuracy')))
     _run.log_scalar("val_categorical_crossentropy", float(logs.get('val_categorical_crossentropy')))
-    _run.log_scalar("val_categorical_accuracy", float(logs.get('val_categorical_accuracy')))
+    _run.log_scalar("val_categori8080cal_accuracy", float(logs.get('val_categorical_accuracy')))
     _run.log_scalar("val_top_3_accuracy", float(logs.get('val_top_3_accuracy')))
     _run.result = float(logs.get('val_top_3_accuracy'))
 
@@ -53,7 +53,7 @@ def main(batch_size, epochs,
          steps, size, lw, saved_model):
     valid_df = pd.read_csv("/home/doodle/pedro/data/validation.csv", nrows=10000)
 
-    db = Database(batch_size, size, lw)
+    db = Database(batch_size, size, lw, remove_unrecognized=True)
     active_learner = BasicActiveLearner()
     x_valid = get_image_array(valid_df["drawing"], size, lw)
     y_valid = get_y_encoding(valid_df['word'])

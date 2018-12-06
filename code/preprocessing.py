@@ -15,7 +15,7 @@ np.random.seed(seed=0)
 
 
 class Database:
-    def __init__(self, batchsize, size, lw):
+    def __init__(self, batchsize, size, lw, remove_unrecognized=False):
         self.batchsize = batchsize
         self.size = size
         self.lw = lw
@@ -26,7 +26,7 @@ class Database:
         class_counts = json.load(open("/home/doodle/pedro/data/counts.json"))
         total = sum(class_counts.values())
 
-        self.streams = [ClassStream(indir + file) for file in sorted_files]
+        self.streams = [ClassStream(indir + file, remove_unrecognized) for file in sorted_files]
         self.prob_dist = [class_counts[name] / total for name in sorted_names]
 
     def _get_unprocessed_next_batch(self, batch_size):
@@ -38,10 +38,8 @@ class Database:
                 x, y = class_stream.get_next()
                 X.append(x)
                 Y.append(y)
+            return X, Y
         return X, Y
-
-    def update_prob_dist(self, prob_dist_updater):
-        self.prob_dist = prob_dist_updater(self.prob_dist)
 
     def processed_batch_generator(self):
         while True:
@@ -50,11 +48,12 @@ class Database:
 
 
 class ClassStream:
-    def __init__(self, file, chunksize=1000):
+    def __init__(self, file, remove_unrecognized, chunksize=1000):
         self.samples = []
         self.word = list(pd.read_csv(file, nrows=1)['word'])[0]
         self.sample_gen = self.sample_generator(chunksize)
         self.file = file
+        self.remove_unrecognized = remove_unrecognized
 
     def get_next(self):
         if len(self.samples) == 0:
@@ -64,6 +63,8 @@ class ClassStream:
     def sample_generator(self, chunksize):
         while (True):
             for chunk in pd.read_csv(self.file, chunksize=chunksize):
+                if self.remove_unrecognized:
+                    chunk = chunk[chunk['recognized']]
                 yield chunk['drawing']
 
 
