@@ -41,6 +41,9 @@ class Database:
             return X, Y
         return X, Y
 
+    def update_prob_dist(self, prob_dist_updater):
+        self.prob_dist = prob_dist_updater(self.prob_dist)
+
     def processed_batch_generator(self):
         while True:
             x, y = self._get_unprocessed_next_batch(self.batchsize)
@@ -62,7 +65,7 @@ class ClassStream:
 
     def sample_generator(self, chunksize):
         while (True):
-            for chunk in pd.read_csv(self.file, chunksize=chunksize):
+            for chunk in pd.read_csv(self.file, chunksize=chunksize, nrows=10000):
                 if self.remove_unrecognized:
                     chunk = chunk[chunk['recognized']]
                 yield chunk['drawing']

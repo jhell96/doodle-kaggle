@@ -43,7 +43,7 @@ def log_performance(_run, logs):
     _run.log_scalar("categorical_accuracy", float(logs.get('categorical_accuracy')))
     _run.log_scalar("top_3_accuracy", float(logs.get('top_3_accuracy')))
     _run.log_scalar("val_categorical_crossentropy", float(logs.get('val_categorical_crossentropy')))
-    _run.log_scalar("val_categori8080cal_accuracy", float(logs.get('val_categorical_accuracy')))
+    _run.log_scalar("val_categorical_accuracy", float(logs.get('val_categorical_accuracy')))
     _run.log_scalar("val_top_3_accuracy", float(logs.get('val_top_3_accuracy')))
     _run.result = float(logs.get('val_top_3_accuracy'))
 
