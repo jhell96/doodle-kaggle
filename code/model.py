@@ -71,7 +71,7 @@ def main(batch_size, epochs,
             validation_data=(x_valid, y_valid),
             callbacks=[
                 ModelCheckpoint("weights/" + EXPERIMENT_NAME + "_weights_" + ".hdf5", monitor='val_loss',
-                                save_best_only=True, mode='auto', period=1),
+                                save_best_only=True, mode='auto', period=10),
                 LogPerformance(log_performance),
                 ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.001),
                 # LRFinder(batch_size * steps, batch_size, minimum_lr=1e-5, maximum_lr=1, lr_scale='exp',
