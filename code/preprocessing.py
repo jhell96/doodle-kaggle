@@ -38,7 +38,6 @@ class Database:
                 x, y = class_stream.get_next()
                 X.append(x)
                 Y.append(y)
-            return X, Y
         return X, Y
 
     def update_prob_dist(self, prob_dist_updater):

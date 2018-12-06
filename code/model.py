@@ -73,7 +73,7 @@ def main(batch_size, epochs,
                 ModelCheckpoint("weights/" + EXPERIMENT_NAME + "_weights_" + ".hdf5", monitor='val_loss',
                                 save_best_only=True, mode='auto', period=10),
                 LogPerformance(log_performance),
-                ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.001),
+                ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=1, min_lr=0.001),
                 # LRFinder(batch_size * steps, batch_size, minimum_lr=1e-5, maximum_lr=1, lr_scale='exp',
                 #          save_dir="learning_rate_losses/", verbose=True)
             ]
