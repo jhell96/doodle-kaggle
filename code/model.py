@@ -15,7 +15,7 @@ from metrics import top_3_accuracy
 from perf_logger import *
 from preprocessing import Database, get_image_array, get_y_encoding
 
-EXPERIMENT_NAME = "128x128_mobilenet_base_active_learner"
+EXPERIMENT_NAME = "128x128_mobilenet_no_learner"
 ex = Experiment(EXPERIMENT_NAME)
 ex.observers.append(MongoObserver.create())  # hook into the MongoDB
 ex.captured_out_filter = apply_backspaces_and_linefeeds  # make output more readable
@@ -78,8 +78,8 @@ def main(batch_size, epochs,
                 #          save_dir="learning_rate_losses/", verbose=True)
             ]
         )
-        y_valid_pred_prob = model.predict(x_valid)
-        db.prob_dist = active_learner.compute_new_prob_dist(y_valid, y_valid_pred_prob, db.prob_dist)
+        # y_valid_pred_prob = model.predict(x_valid)
+        # db.prob_dist = active_learner.compute_new_prob_dist(y_valid, y_valid_pred_prob, db.prob_dist)
 
     score = model.evaluate(x_valid, y_valid, verbose=0)
     print('Test loss:', score[0])
