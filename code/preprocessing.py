@@ -22,9 +22,10 @@ class Database:
 
         indir = "/home/doodle/pedro/data/training_data_grouped/"
         sorted_files = sorted(list(listdir(indir)), key=str.lower)
+        sorted_files = [file for file in sorted_files if file.split('.')[0] in CATEGORIES_TO_INDEX]
         sorted_names = [file.split('.')[0] for file in sorted_files]
         class_counts = json.load(open("/home/doodle/pedro/data/counts.json"))
-        total = sum(class_counts.values())
+        total = sum([class_counts[name] for name in sorted_names])
 
         self.streams = [ClassStream(indir + file, remove_unrecognized) for file in sorted_files]
         self.prob_dist = [class_counts[name] / total for name in sorted_names]
@@ -64,7 +65,7 @@ class ClassStream:
 
     def sample_generator(self, chunksize):
         while (True):
-            for chunk in pd.read_csv(self.file, chunksize=chunksize, nrows=10000):
+            for chunk in pd.read_csv(self.file, chunksize=chunksize, nrows=17000):
                 if self.remove_unrecognized:
                     chunk = chunk[chunk['recognized']]
                 yield chunk['drawing']
