@@ -16,7 +16,7 @@ from perf_logger import *
 from preprocessing import Database, get_image_array, get_y_encoding
 from constants import CATEGORIES_TO_INDEX
 
-EXPERIMENT_NAME = "128x128_mobilenet_active_learner_keep_unrecognized_subsampled"
+EXPERIMENT_NAME = "128x128_mobilenet_active_learner_remove_unrecognized"
 
 ex = Experiment(EXPERIMENT_NAME)
 ex.observers.append(MongoObserver.create())  # hook into the MongoDB
@@ -89,7 +89,7 @@ def main(_run, batch_size, epochs,
             validation_data=(x_valid, y_valid),
             callbacks=[
                 ModelCheckpoint(WEIGHTS_PATH, monitor='val_loss',
-                                save_best_only=True, mode='auto', period=10),
+                                save_best_only=True, mode='auto', period=1),
                 LogPerformance(log_performance),
                 ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=1, min_lr=0.001),
                 # LRFinder(batch_size * steps, batch_size, minimum_lr=1e-5, maximum_lr=1, lr_scale='exp',
