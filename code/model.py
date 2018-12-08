@@ -16,7 +16,7 @@ from perf_logger import *
 from preprocessing import Database, get_image_array, get_y_encoding
 from constants import CATEGORIES_TO_INDEX
 
-EXPERIMENT_NAME = "128x128_mobilenet_active_learner_remove_unrecognized"
+EXPERIMENT_NAME = "128x128_mobilenet_no_learner_keep_unrecognized_sample_easy"
 
 ex = Experiment(EXPERIMENT_NAME)
 ex.observers.append(MongoObserver.create())  # hook into the MongoDB
@@ -48,6 +48,7 @@ def log_performance(_run, logs):
     _run.log_scalar("val_top_3_accuracy", float(logs.get('val_top_3_accuracy')))
     _run.result = float(logs.get('val_top_3_accuracy'))
 
+
 def log_probs(exp_id, probs):
     filename = "logs/class_probs/exp_{}.csv".format(exp_id)
     with open(filename, "a") as f:
@@ -70,8 +71,8 @@ def main(_run, batch_size, epochs,
                   metrics=[categorical_crossentropy, categorical_accuracy, top_3_accuracy])
 
     WEIGHTS_PATH = "weights/{}_weights_{}.hdf5".format(EXPERIMENT_NAME, _run._id)
-    
-    # this is a bug fix. we need to create the weights file before the mongo db tries to 
+
+    # this is a bug fix. we need to create the weights file before the mongo db tries to
     # access the file (otherwise, it throws an error because mongo tries to access before its
     # created by the training callback function)
     ##################################
@@ -89,7 +90,7 @@ def main(_run, batch_size, epochs,
             validation_data=(x_valid, y_valid),
             callbacks=[
                 ModelCheckpoint(WEIGHTS_PATH, monitor='val_loss',
-                                save_best_only=True, mode='auto', period=1),
+                                save_best_only=True, mode='auto', period=10),
                 LogPerformance(log_performance),
                 ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=1, min_lr=0.001),
                 # LRFinder(batch_size * steps, batch_size, minimum_lr=1e-5, maximum_lr=1, lr_scale='exp',
@@ -97,21 +98,9 @@ def main(_run, batch_size, epochs,
             ]
         )
         log_probs(_run._id, db.prob_dist)
-        y_valid_pred_prob = model.predict(x_valid)
-        db.prob_dist = active_learner.compute_new_prob_dist(y_valid, y_valid_pred_prob, db.prob_dist)
+        # y_valid_pred_prob = model.predict(x_valid)
+        # db.prob_dist = active_learner.compute_new_prob_dist(y_valid, y_valid_pred_prob, db.prob_dist)
     score = model.evaluate(x_valid, y_valid, verbose=0)
     print('Test loss:', score[0])
     print('Test accuracy:', score[1])
     return score[1]
-
-#
-#
-# if __name__ == "__main__":
-#     batch_size = 512
-#     num_samples = 5000000
-#     steps = num_samples // batch_size
-#     epochs = 40
-#     size = 128
-#     lw = 6
-#     saved_model = None  # "weights/128x128_mobilenet_copy.hdf5"
-#     main(batch_size=batch_size, steps=steps, epochs=epochs, lw=lw, size=size, saved_model=saved_model)

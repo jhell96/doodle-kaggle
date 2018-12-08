@@ -20,7 +20,7 @@ class Database:
         self.size = size
         self.lw = lw
 
-        indir = "/home/doodle/pedro/data/training_data_grouped/"
+        indir = "/home/doodle/pedro/data/training_data_subsampled/"
         sorted_files = sorted(list(listdir(indir)), key=str.lower)
         sorted_files = [file for file in sorted_files if file.split('.')[0] in CATEGORIES_TO_INDEX]
         sorted_names = [file.split('.')[0] for file in sorted_files]
