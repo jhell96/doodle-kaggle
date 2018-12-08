@@ -15,6 +15,7 @@ from metrics import top_3_accuracy
 from perf_logger import *
 from preprocessing import Database, get_image_array, get_y_encoding
 from constants import CATEGORIES_TO_INDEX
+from importance_sampling.training import ImportanceTraining
 
 EXPERIMENT_NAME = "128x128_mobilenet_no_learner_keep_unrecognized_sample_easy"
 
@@ -83,8 +84,8 @@ def main(_run, batch_size, epochs,
     print("finished compiling model")
     if saved_model is not None:
         model.load_weights(saved_model)
+    train_datagen = db.processed_batch_generator()
     for _ in range(epochs):
-        train_datagen = db.processed_batch_generator()
         model.fit_generator(
             train_datagen, steps_per_epoch=steps, epochs=1, verbose=1,
             validation_data=(x_valid, y_valid),

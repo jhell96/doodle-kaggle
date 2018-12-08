@@ -65,7 +65,7 @@ class ClassStream:
 
     def sample_generator(self, chunksize):
         while (True):
-            for chunk in pd.read_csv(self.file, chunksize=chunksize, nrows=17000):
+            for chunk in pd.read_csv(self.file, chunksize=chunksize, nrows=40000):
                 if self.remove_unrecognized:
                     chunk = chunk[chunk['recognized']]
                 yield chunk['drawing']
