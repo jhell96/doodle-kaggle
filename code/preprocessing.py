@@ -9,7 +9,7 @@ import pandas as pd
 from keras.applications.mobilenet import preprocess_input
 from keras.utils import to_categorical
 
-from constants import NCATS, BASE_SIZE, CATEGORIES_TO_INDEX, NUM_DIFFICULTIES
+from constants import NCATS, BASE_SIZE, CATEGORIES_TO_INDEX, NUM_DIFFICULTIES, E
 
 np.random.seed(seed=0)
 
@@ -61,17 +61,20 @@ class DifficultyDatabase:
 
     def _get_unprocessed_next_batch(self, batch_size):
         X, Y = [], []
-        index = np.random.choice(list(range(len(self.streams))), p=self.prob_dist)
+        if np.random.random() < E:
+            index = np.random.choice(list(range(len(self.streams))), p=self.prob_dist)
+        else:
+            index = np.random.choice(list(range(len(self.streams))))
         for i in range(batch_size):
             x, y = self.streams[index].get_next()
             X.append(x)
             Y.append(y)
-        return (X, Y), index
+        return X, Y, index
 
     def processed_batch_generator(self):
         while True:
-            x, y = self._get_unprocessed_next_batch(self.batchsize)
-            yield get_image_array(x, self.size, self.lw), get_y_encoding(y)
+            x, y, index = self._get_unprocessed_next_batch(self.batchsize)
+            yield (get_image_array(x, self.size, self.lw), get_y_encoding(y)), index
 
 
 class FileStream:

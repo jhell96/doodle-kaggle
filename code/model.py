@@ -49,6 +49,21 @@ def log_performance(_run, logs):
     _run.result = float(logs.get('val_top_3_accuracy'))
 
 
+@ex.capture
+def log_other_metrics(_run, epoch_metrics, validation_metrics):
+    loss, cce, ca, top3 = epoch_metrics
+    vloss, vcce, vca, vtop3 = validation_metrics
+
+    _run.log_scalar("train_loss", loss)
+    _run.log_scalar("categorical_crossentropy", cce)
+    _run.log_scalar("categorical_accuracy", ca)
+    _run.log_scalar("top_3_accuracy", top3)
+    _run.log_scalar("val_categorical_crossentropy", vcce)
+    _run.log_scalar("val_categorical_accuracy", vca)
+    _run.log_scalar("val_top_3_accuracy", vtop3)
+    _run.result = float(vtop3)
+
+
 def log_probs(exp_id, probs):
     filename = "logs/class_probs/exp_{}.csv".format(exp_id)
     with open(filename, "a") as f:
@@ -61,7 +76,7 @@ def main(_run, batch_size, epochs,
     valid_df = pd.read_csv("/home/doodle/pedro/data/validation.csv")
     in_categories = [word in CATEGORIES_TO_INDEX for word in valid_df["word"]]
     valid_df = valid_df[in_categories]
-    valid_df = valid_df[:1000]
+    valid_df = valid_df[:100]
     db = DifficultyDatabase(batch_size, size, lw)
     active_learner = DifficultyLearner()
     training_gen = db.processed_batch_generator()
@@ -80,31 +95,27 @@ def main(_run, batch_size, epochs,
         f.write(" ")
     #################################
 
-
     print("finished compiling model")
     if saved_model is not None:
         model.load_weights(saved_model)
     for i in range(epochs):
-        print("2")
+        epoch_metrics = np.zeros(4)
         for _ in range(steps):
             batch, index = next(training_gen)
-            a = 1 / 0
-            loss = model.evaluate(batch)
-            model.fit(batch, epochs=1,validation_data=(x_valid, y_valid))
-            progress = loss - model.evaluate(batch)
-            db.prob_dist = active_learner.compute_new_prob_dist(index, progress, db.prob_dist[i])
+            x, y = batch
+            batch_metrics = model.evaluate(x, y)
+            validation_metrics = model.evaluate(x_valid, y_valid)
+            epoch_metrics += np.array(batch_metrics)
+            loss = validation_metrics[0]
+            model.fit(x, y, epochs=1, batch_size=batch_size)
+            progress = model.evaluate(x_valid, y_valid)[0] - loss
+            db.prob_dist = active_learner.compute_new_prob_dist(index, progress, db.prob_dist)
+            print(db.prob_dist)
+        log_probs(_run._id, db.prob_dist)
+        epoch_metrics /= steps
+        validation_metrics = model.evaluate(x_valid, y_valid)
+        log_other_metrics(_run, epoch_metrics, validation_metrics)
 
-        model.fit(batch[1:2],
-                  validation_data=(x_valid, y_valid),
-                  callbacks = [
-                     ModelCheckpoint(WEIGHTS_PATH, monitor='val_loss',
-                                    save_best_only=True, mode='auto', period=10),
-                     LogPerformance(log_performance),
-                  ])
-
-        # log_probs(_run._id, db.prob_dist)
-        # y_valid_pred_prob = model.predict(x_valid)
-        # db.prob_dist = active_learner.compute_new_prob_dist(y_valid, y_valid_pred_prob, db.prob_dist)
     score = model.evaluate(x_valid, y_valid, verbose=0)
     print('Test loss:', score[0])
     print('Test accuracy:', score[1])
