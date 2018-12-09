@@ -9,7 +9,7 @@ import pandas as pd
 from keras.applications.mobilenet import preprocess_input
 from keras.utils import to_categorical
 
-from constants import NCATS, BASE_SIZE, CATEGORIES_TO_INDEX
+from constants import NCATS, BASE_SIZE, CATEGORIES_TO_INDEX, NUM_DIFFICULTIES
 
 np.random.seed(seed=0)
 
@@ -27,7 +27,7 @@ class Database:
         class_counts = json.load(open("/home/doodle/pedro/data/counts.json"))
         total = sum([class_counts[name] for name in sorted_names])
 
-        self.streams = [ClassStream(indir + file, remove_unrecognized) for file in sorted_files]
+        self.streams = [FileStream(indir + file, remove_unrecognized) for file in sorted_files]
         self.prob_dist = [class_counts[name] / total for name in sorted_names]
 
     def _get_unprocessed_next_batch(self, batch_size):
@@ -50,40 +50,59 @@ class Database:
             yield get_image_array(x, self.size, self.lw), get_y_encoding(y)
 
 
-class ClassStream:
+class DifficultyDatabase:
+    def __init__(self, batchsize, size, lw):
+        self.batchsize = batchsize
+        self.size = size
+        self.lw = lw
+        indir = "/home/doodle/pedro/data/training_data_by_difficulty/"
+        self.streams = [FileStream(indir + str(i + 1), remove_unrecognized=False) for i in range(NUM_DIFFICULTIES)]
+        self.prob_dist = [0.1] * NUM_DIFFICULTIES
+
+    def _get_unprocessed_next_batch(self, batch_size):
+        X, Y = [], []
+        index = np.random.choice(list(range(len(self.streams))), p=self.prob_dist)
+        for i in range(batch_size):
+            x, y = self.streams[index].get_next()
+            X.append(x)
+            Y.append(y)
+        return (X, Y), index
+
+    def processed_batch_generator(self):
+        while True:
+            x, y = self._get_unprocessed_next_batch(self.batchsize)
+            yield get_image_array(x, self.size, self.lw), get_y_encoding(y)
+
+
+class FileStream:
     def __init__(self, file, remove_unrecognized, chunksize=1000):
-        self.samples = []
-        self.word = list(pd.read_csv(file, nrows=1)['word'])[0]
+        self.Xs = []
+        self.Ys = []
         self.sample_gen = self.sample_generator(chunksize)
         self.file = file
         self.remove_unrecognized = remove_unrecognized
 
     def get_next(self):
-        if len(self.samples) == 0:
-            self.samples.extend(next(self.sample_gen))
-        return self.samples.pop(), self.word
+        if len(self.Xs) == 0:
+            xs, ys = next(self.sample_gen)
+            self.Xs.extend(xs)
+            self.Ys.extend(ys)
+        return self.Xs.pop(), self.Ys.pop()
 
     def sample_generator(self, chunksize):
         while (True):
             for chunk in pd.read_csv(self.file, chunksize=chunksize, nrows=40000):
                 if self.remove_unrecognized:
                     chunk = chunk[chunk['recognized']]
-                yield chunk['drawing']
+                yield chunk['drawing'], chunk["word"]
 
 
 def draw_cv2(raw_strokes, size, lw):
     img = np.zeros((BASE_SIZE, BASE_SIZE), np.uint8)
     for t, stroke in enumerate(raw_strokes):
         for i in range(len(stroke[0]) - 1):
-            # colors = (255, 255, 255)
-            # #color = 255
-            # color = 255 - min(t, 10) * 13
-            # colors = [0]*3
-            # colors[0] = 255
-            # colors[min(i,2)] = color
-            # colors =  (255, 255, 255)
-            _ = cv2.line(img, (stroke[0][i], stroke[1][i]),
-                         (stroke[0][i + 1], stroke[1][i + 1]), 255, lw)
+            cv2.line(img, (stroke[0][i], stroke[1][i]),
+                     (stroke[0][i + 1], stroke[1][i + 1]), 255, lw)
     if size != BASE_SIZE:
         img = cv2.resize(img, (size, size))
         return img
@@ -107,6 +126,19 @@ def get_y_encoding(words):
 
 def preds2catids(predictions):
     return pd.DataFrame(np.argsort(-predictions, axis=1)[:, :3], columns=['a', 'b', 'c'])
+
+
+def full_image_generator(size, batchsize, lw, proportion=1):
+    while True:
+        filename = "/home/doodle/pedro/data/sorted_traing_data.csv"
+        df = pd.read_csv(filename)
+        df = df[:int(len(df) * proportion)]
+        tmp = "/home/doodle/pedro/data/tmp.csv"
+        df.sample(frac=1).to_csv(tmp, index=False)
+        for chunk in pd.read_csv(tmp, chunksize=batchsize):
+            x = get_image_array(chunk["drawing"], size, lw)
+            y = get_y_encoding(chunk["word"])
+            yield x, y
 
 
 if __name__ == "__main__":

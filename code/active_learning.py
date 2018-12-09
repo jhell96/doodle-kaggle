@@ -1,5 +1,8 @@
 import numpy as np
 from constants import NCATS
+from math import e
+from bisect import bisect_right
+
 
 class BasicActiveLearner:
     def compute_new_prob_dist(self, y_actual, y_predict_prob, old_prob):
@@ -13,4 +16,18 @@ class BasicActiveLearner:
         new_prob = [prob/total for prob in new_prob_dist]
         return new_prob
 
+class DifficultyLearner:
+    def __init__(self):
+        self.weights = [0]*10
+        self.progresses = [0]
+
+    def compute_new_prob_dist(self, i, progress, prob_i):
+        if len(self.progresses) > 50:
+            self.progresses = self.progresses[:49]
+        rank = bisect_right(sorted(self.progresses), progress)
+        self.progresses.append(progress)
+        self.weights[i] += (rank-50)/100/prob_i
+        exp_weights = [e**weight for weight in self.weights]
+        sum_weights = sum(exp_weights)
+        return [weight/sum_weights for weight in exp_weights]
 
