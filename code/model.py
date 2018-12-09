@@ -13,11 +13,10 @@ from sacred.utils import apply_backspaces_and_linefeeds
 from active_learning import BasicActiveLearner
 from metrics import top_3_accuracy
 from perf_logger import *
-from preprocessing import Database, get_image_array, get_y_encoding
+from preprocessing import Database, get_image_array, get_y_encoding, full_image_generator
 from constants import CATEGORIES_TO_INDEX
-from importance_sampling.training import ImportanceTraining
 
-EXPERIMENT_NAME = "128x128_mobilenet_no_learner_keep_unrecognized_sample_easy"
+EXPERIMENT_NAME = "128x128_mobilenet_no_learner_keep_bucket_sampling"
 
 ex = Experiment(EXPERIMENT_NAME)
 ex.observers.append(MongoObserver.create())  # hook into the MongoDB
@@ -63,7 +62,7 @@ def main(_run, batch_size, epochs,
     in_categories = [word in CATEGORIES_TO_INDEX for word in valid_df["word"]]
     valid_df = valid_df[in_categories]
     valid_df = valid_df[:1000]
-    db = Database(batch_size, size, lw, remove_unrecognized=False)
+    # db = Database(batch_size, size, lw, remove_unrecognized=False)
     active_learner = BasicActiveLearner()
     x_valid = get_image_array(valid_df["drawing"], size, lw)
     y_valid = get_y_encoding(valid_df['word'])
@@ -84,8 +83,9 @@ def main(_run, batch_size, epochs,
     print("finished compiling model")
     if saved_model is not None:
         model.load_weights(saved_model)
-    train_datagen = db.processed_batch_generator()
-    for _ in range(epochs):
+    for i in range(epochs):
+        if i % 16 ==0:
+            train_datagen = full_image_generator(size, batch_size, lw, proportion=((i/16+1)/3))
         model.fit_generator(
             train_datagen, steps_per_epoch=steps, epochs=1, verbose=1,
             validation_data=(x_valid, y_valid),
@@ -98,7 +98,7 @@ def main(_run, batch_size, epochs,
                 #          save_dir="learning_rate_losses/", verbose=True)
             ]
         )
-        log_probs(_run._id, db.prob_dist)
+        # log_probs(_run._id, db.prob_dist)
         # y_valid_pred_prob = model.predict(x_valid)
         # db.prob_dist = active_learner.compute_new_prob_dist(y_valid, y_valid_pred_prob, db.prob_dist)
     score = model.evaluate(x_valid, y_valid, verbose=0)
