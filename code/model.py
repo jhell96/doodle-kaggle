@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from keras.applications import MobileNet
-from keras.callbacks import ModelCheckpoint
+from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from keras.losses import categorical_crossentropy
 from keras.metrics import categorical_accuracy
 from keras.optimizers import Adam
@@ -14,9 +14,9 @@ from active_learning import DifficultyLearner
 from constants import CATEGORIES_TO_INDEX
 from metrics import top_3_accuracy
 from perf_logger import *
-from preprocessing import get_image_array, get_y_encoding, DifficultyDatabase
+from preprocessing import get_image_array, get_y_encoding, DifficultyDatabase, UniformDatabase, Database
 
-EXPERIMENT_NAME = "128x128_mobilenet_difficulty_learner"
+EXPERIMENT_NAME = "128x128_mobilenet_uniform_learner"
 
 ex = Experiment(EXPERIMENT_NAME)
 ex.observers.append(MongoObserver.create())  # hook into the MongoDB
@@ -77,7 +77,7 @@ def main(_run, batch_size, epochs,
     in_categories = [word in CATEGORIES_TO_INDEX for word in valid_df["word"]]
     valid_df = valid_df[in_categories]
     valid_df = valid_df[:100]
-    db = DifficultyDatabase(batch_size, size, lw)
+    db = Database(batch_size, size, lw)
     active_learner = DifficultyLearner()
     training_gen = db.processed_batch_generator()
     x_valid = get_image_array(valid_df["drawing"], size, lw)
@@ -98,23 +98,27 @@ def main(_run, batch_size, epochs,
     print("finished compiling model")
     if saved_model is not None:
         model.load_weights(saved_model)
-    for i in range(epochs):
-        epoch_metrics = np.zeros(4)
-        for _ in range(steps):
-            batch, index = next(training_gen)
-            x, y = batch
-            batch_metrics = model.evaluate(x, y)
-            validation_metrics = model.evaluate(x_valid, y_valid)
-            epoch_metrics += np.array(batch_metrics)
-            loss = validation_metrics[0]
-            model.fit(x, y, epochs=1, batch_size=batch_size)
-            progress = model.evaluate(x_valid, y_valid)[0] - loss
-            db.prob_dist = active_learner.compute_new_prob_dist(index, progress, db.prob_dist)
-            print(db.prob_dist)
+    for _ in range(epochs):
+        train_datagen = db.processed_batch_generator()
+        model.fit_generator(
+            train_datagen, steps_per_epoch=steps, epochs=1, verbose=1,
+            validation_data=(x_valid, y_valid),
+            callbacks=[
+                ModelCheckpoint(WEIGHTS_PATH, monitor='val_loss',
+                                save_best_only=True, mode='auto', period=10),
+                LogPerformance(log_performance)
+                # ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=1, min_lr=0.001),
+                # LRFinder(batch_size * steps, batch_size, minimum_lr=1e-5, maximum_lr=1, lr_scale='exp',
+                #          save_dir="learning_rate_losses/", verbose=True)
+            ]
+        )
         log_probs(_run._id, db.prob_dist)
-        epoch_metrics /= steps
-        validation_metrics = model.evaluate(x_valid, y_valid)
-        log_other_metrics(_run, epoch_metrics, validation_metrics)
+        y_valid_pred_prob = model.predict(x_valid)
+        db.prob_dist = active_learner.compute_new_prob_dist(y_valid, y_valid_pred_prob, db.prob_dist)
+    score = model.evaluate(x_valid, y_valid, verbose=0)
+    print('Test loss:', score[0])
+    print('Test accuracy:', score[1])
+    return score[1]
 
     score = model.evaluate(x_valid, y_valid, verbose=0)
     print('Test loss:', score[0])
