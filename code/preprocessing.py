@@ -77,24 +77,6 @@ class DifficultyDatabase:
             yield (get_image_array(x, self.size, self.lw), get_y_encoding(y)), index
 
 
-class UniformDatabase:
-    def __init__(self, batchsize, size, lw):
-        self.batchsize = batchsize
-        self.size = size
-        self.lw = lw
-        indir = "/home/doodle/pedro/data/training_data_by_difficulty/"
-        self.stream = FileStream(indir + "full.csv", remove_unrecognized=False)
-
-    def processed_batch_generator(self):
-        while True:
-            X, Y = [], []
-            for i in range(self.batchsize):
-                x, y = self.stream.get_next()
-                X.append(x)
-                Y.append(y)
-            yield get_image_array(X, self.size, self.lw), get_y_encoding(Y)
-
-
 class FileStream:
     def __init__(self, file, remove_unrecognized, chunksize=1000):
         self.Xs = []

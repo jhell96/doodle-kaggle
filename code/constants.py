@@ -1,7 +1,7 @@
 NCSVS = 100
 BASE_SIZE = 256
 NUM_DIFFICULTIES = 10
-E = 0
+E = 0.9
 # CATEGORIES = ['airplane',
 #               'alarm clock',
 #               'ambulance',
