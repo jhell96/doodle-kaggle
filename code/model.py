@@ -16,7 +16,7 @@ from metrics import top_3_accuracy
 from perf_logger import *
 from preprocessing import get_image_array, get_y_encoding, DifficultyDatabase
 
-EXPERIMENT_NAME = "128x128_mobilenet_difficulty_learner"
+EXPERIMENT_NAME = "128x128_mobilenet_difficulty_learner_exponential_decay_0.97"
 
 ex = Experiment(EXPERIMENT_NAME)
 ex.observers.append(MongoObserver.create())  # hook into the MongoDB
@@ -76,12 +76,16 @@ def main(_run, batch_size, epochs,
     valid_df = pd.read_csv("/home/doodle/pedro/data/validation.csv")
     in_categories = [word in CATEGORIES_TO_INDEX for word in valid_df["word"]]
     valid_df = valid_df[in_categories]
-    valid_df = valid_df[:100]
+    valid_df1, valid_df2 = valid_df[:100], valid_df[100:1100]
+
     db = DifficultyDatabase(batch_size, size, lw)
     active_learner = DifficultyLearner()
     training_gen = db.processed_batch_generator()
-    x_valid = get_image_array(valid_df["drawing"], size, lw)
-    y_valid = get_y_encoding(valid_df['word'])
+    x_valid = get_image_array(valid_df1["drawing"], size, lw)
+    y_valid = get_y_encoding(valid_df1['word'])
+    x_valid2 = get_image_array(valid_df2["drawing"], size, lw)
+    y_valid2 = get_y_encoding(valid_df2["word"])
+
     model = MobileNet(weights=None, input_shape=(size, size, 1), classes=30)
     model.compile(optimizer=Adam(lr=0.0002), loss='categorical_crossentropy',
                   metrics=[categorical_crossentropy, categorical_accuracy, top_3_accuracy])
@@ -106,14 +110,14 @@ def main(_run, batch_size, epochs,
             batch_metrics = model.evaluate(x, y)
             validation_metrics = model.evaluate(x_valid, y_valid)
             epoch_metrics += np.array(batch_metrics)
-            loss = validation_metrics[0]
+            loss = epoch_metrics[0]
             model.fit(x, y, epochs=1, batch_size=batch_size)
-            progress = model.evaluate(x_valid, y_valid)[0] - loss
+            progress = model.evaluate(x, y)[0] - loss
             db.prob_dist = active_learner.compute_new_prob_dist(index, progress, db.prob_dist)
             print(db.prob_dist)
         log_probs(_run._id, db.prob_dist)
         epoch_metrics /= steps
-        validation_metrics = model.evaluate(x_valid, y_valid)
+        validation_metrics = model.evaluate(x_valid2, y_valid2)
         log_other_metrics(_run, epoch_metrics, validation_metrics)
 
     score = model.evaluate(x_valid, y_valid, verbose=0)

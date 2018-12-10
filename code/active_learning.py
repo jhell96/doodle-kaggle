@@ -26,7 +26,7 @@ class DifficultyLearner:
         if len(self.progresses) > self.threshold:
             rank = bisect_right(sorted(self.progresses), progress)
             self.progresses.append(progress)
-            weight_diff = (2*rank-len(self.progresses))/len(self.progresses)/10
+            weight_diff = (2*rank-len(self.progresses))/len(self.progresses)/5
             assert 1 >= weight_diff >= -1
             prob = (old_prob_dist[i])*E+(1-E)/10
             assert 0 <= prob <= 1
