@@ -1,2 +1,2 @@
 # doodle-kaggle
-A solution to Google AI's Doodle Kaggle Challenge
+An exploration of curriculum learning on Google's Doodle Kaggle Challenge dataset.
